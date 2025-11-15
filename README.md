@@ -90,9 +90,9 @@ python -m src.generate \
 
 Outputs land in `artifacts/outputs/<experiment>-baseline-<timestamp>/` with PNGs under `images/` and metadata in `metadata.json`.
 
-## 4. Dataset Preparation (no captions provided)
+## 4. Dataset Preparation
 
-Place your ~80 subject images inside the `dataset/` directory (e.g., `dataset/raw_knightro/`). Then run the builder to copy the images into a kohya-friendly folder and auto-generate caption `.txt` files:
+Place your subject images inside the `dataset/` directory (e.g., `dataset/raw_knightro/`). Then run the builder to copy the images into a kohya-friendly folder and auto-generate caption `.txt` files:
 
 ```bash
 python -m src.dataset.build_training_set \
@@ -102,11 +102,13 @@ python -m src.dataset.build_training_set \
   --caption-template "RAW action shot of {subject_token}, UCF stadium, high energy"
 ```
 
+From here you can edit the caption .txt files if you would like.
+
 Tweak `--subject-token` and `--caption-template` to fit your subject. Use the resulting directory (e.g., `artifacts/datasets/knightro`) as `--train_data_dir` when launching kohya-ss.
 
 ## 5. Fine-Tuning with `kohya-ss/sd-scripts`
 
-1. Clone the upstream project outside of `src/` (keeps provenance clear):
+1. Clone the upstream project outside of `src/`:
    ```bash
    git clone https://github.com/kohya-ss/sd-scripts external/sd-scripts
    ```

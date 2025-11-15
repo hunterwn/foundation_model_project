@@ -10,6 +10,7 @@ from diffusers import (
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     StableDiffusionPipeline,
+    StableDiffusionXLPipeline,
     UniPCMultistepScheduler,
 )
 
@@ -39,17 +40,30 @@ class ImageGenerator:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.pipeline = self._build_pipeline()
 
-    def _build_pipeline(self) -> StableDiffusionPipeline:
-        torch_dtype = torch.float16 if self.config.precision == "fp16" and self.device == "cuda" else torch.float32
+    def _build_pipeline(self) -> StableDiffusionPipeline | StableDiffusionXLPipeline:
+        # Determine if we're using SDXL based on model path
+        is_sdxl = "xl" in self.model_path.lower()
+
+        # Select appropriate dtype
+        if self.config.precision == "bf16" and self.device == "cuda":
+            torch_dtype = torch.bfloat16
+        elif self.config.precision == "fp16" and self.device == "cuda":
+            torch_dtype = torch.float16
+        else:
+            torch_dtype = torch.float32
+
+        # Select pipeline class
+        pipeline_cls = StableDiffusionXLPipeline if is_sdxl else StableDiffusionPipeline
+
         model_path = Path(self.model_path)
         if model_path.is_file() and model_path.suffix.lower() in {".safetensors", ".ckpt"}:
-            pipeline = StableDiffusionPipeline.from_single_file(
+            pipeline = pipeline_cls.from_single_file(
                 str(model_path),
                 torch_dtype=torch_dtype,
                 safety_checker=None,
             )
         else:
-            pipeline = StableDiffusionPipeline.from_pretrained(
+            pipeline = pipeline_cls.from_pretrained(
                 str(model_path),
                 torch_dtype=torch_dtype,
                 safety_checker=None,

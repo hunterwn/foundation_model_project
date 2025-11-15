@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from .configuration import ExperimentConfig, resolve_prompts_path
