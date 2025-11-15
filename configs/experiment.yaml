@@ -1,0 +1,15 @@
+experiment_name: "knightro"
+base_model: "runwayml/stable-diffusion-v1-5"
+fine_tuned_model: "artifacts/finetune/knightro/merged.safetensors"
+prompt_file: "prompts/knightro_prompts.yaml"
+negative_prompt: "blurry, lowres, text, watermark, extra limbs"
+num_images_per_prompt: 4
+guidance_scale: 7.5
+num_inference_steps: 30
+seed: 12345
+output_root: "artifacts/outputs"
+height: 512
+width: 512
+scheduler: "euler_a"
+precision: "fp16"
+save_metadata: true

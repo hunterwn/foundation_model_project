@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Environments
+.venv/
+.env/
+
+# IDE / tooling
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Project artifacts
+artifacts/
+external/
+dataset/
+models/
+
+# Logs / checkpoints
+*.log
+*.ckpt
+*.safetensors
+
+# Misc
+*.zip

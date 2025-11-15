@@ -1,0 +1,8 @@
+subject_identifier: "<knightro>"
+style_prefix: "RAW action photo, ultra-detailed, stadium lighting, 50mm lens"
+positive_prompts:
+  - "{subject_identifier} leading the crowd with raised sword, fireworks in background"
+  - "full body shot of {subject_identifier} riding a black horse across the UCF football field"
+  - "portrait of {subject_identifier} posing with cheer team, golden hour sunlight"
+  - "dramatic close-up of {subject_identifier} pointing toward the sky, smoke effects"
+  - "{subject_identifier} standing in front of the UCF Pegasus statue, cinematic lighting"
