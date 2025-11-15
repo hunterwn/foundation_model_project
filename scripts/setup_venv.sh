@@ -2,6 +2,13 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${REPO_ROOT}/.env"
+  set +a
+fi
 VENV_PATH="${REPO_ROOT}/.venv"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 

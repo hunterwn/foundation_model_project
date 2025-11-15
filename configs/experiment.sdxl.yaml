@@ -1,0 +1,15 @@
+experiment_name: "knightro-xl"
+base_model: "stabilityai/stable-diffusion-xl-base-1.0"
+fine_tuned_model: "artifacts/finetune/knightro_xl/merged.safetensors"
+prompt_file: "prompts/knightro_prompts.yaml"
+negative_prompt: "blurry, lowres, text, watermark, extra limbs"
+num_images_per_prompt: 4
+guidance_scale: 6.5
+num_inference_steps: 40
+seed: 12345
+output_root: "artifacts/outputs"
+height: 1024
+width: 1024
+scheduler: "dpm"
+precision: "bf16"
+save_metadata: true

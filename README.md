@@ -34,9 +34,11 @@ pip install -r requirements.txt
 
 Install the correct CUDA-enabled build of `torch` for your GPU before running inference or kohya-ss training.
 
+All shell and Python scripts automatically load environment variables from `.env` at the repository root (using `python-dotenv`). Add entries like `WANDB_API_KEY=...` there instead of exporting manually. Copy `example.env` or `example.xl.env` to `.env` depending on whether you want the SD 1.5 defaults or the SDXL defaults, then tweak values from there.
+
 ## 2. Configure Experiments & Prompts
 
-1. Edit `configs/experiment.yaml` with:
+1. Edit the configuration file referenced by the `EXPERIMENT_CONFIG` environment variable (defaults to `configs/experiment.yaml`, or `configs/experiment.sdxl.yaml` when running the SDXL env). Update:
    - `experiment_name`
    - `base_model` (Hugging Face repo ID or a local checkpoint path)
    - `fine_tuned_model` (where kohya-ss will save your tuned weights, e.g., `artifacts/finetune/knightro/last`)
@@ -76,6 +78,8 @@ save_metadata: true
 ```
 
 ## 3. Baseline Image Generation (pre fine-tune)
+
+If you use a different experiment YAML, set `EXPERIMENT_CONFIG=/path/to/other.yaml` in `.env` (copying from the example files as needed) or pass `--config` explicitly. Example:
 
 ```bash
 python -m src.generate \
@@ -127,7 +131,7 @@ Tweak `--subject-token` and `--caption-template` to fit your subject. Use the re
    Adjust parameters (VRAM, steps, LoRA vs. full fine-tune) to suit your hardware.
 4. When training completes, set `fine_tuned_model` in `configs/experiment.yaml` to the folder containing the checkpoint you want to evaluate (e.g., `artifacts/finetune/my_subject/last`).
 
-The helper script `./scripts/run_training.sh` wraps these steps. It creates `models/` if needed, downloads `sd-v1-5-pruned.safetensors` into that folder when the file is missing, launches training (unless `SKIP_TRAINING=1`), and then merges the resulting LoRA into `artifacts/finetune/<subject>/merged.safetensors`. Override paths via env vars such as `DATASET_DIR`, `OUTPUT_DIR`, or `MERGE_SD_MODEL`.
+The helper script `./scripts/run_training.sh` wraps these steps. It creates `models/` if needed, downloads `sd-v1-5-pruned.safetensors` into that folder when the file is missing, launches training (unless `SKIP_TRAINING=1`), and then merges the resulting LoRA into `artifacts/finetune/<subject>/merged.safetensors`. Override paths via env vars such as `DATASET_DIR`, `OUTPUT_DIR`, or `MERGE_SD_MODEL`. You can also switch training/merging entrypoints by setting `TRAIN_SCRIPT`/`MERGE_SCRIPT` (see `example.xl.env` for the SDXL defaults).
 
 ## 6. Post Fine-Tune Generation
 

@@ -9,9 +9,14 @@ from .prompts import load_prompt_set
 from .utils import ensure_dir, timestamp_now
 
 
+DEFAULT_CONFIG_PATH = Path(
+    os.environ.get("EXPERIMENT_CONFIG", "configs/experiment.yaml")
+)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate images for baseline or fine-tuned models.")
-    parser.add_argument("--config", default="configs/experiment.yaml", help="Path to the experiment config YAML.")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to the experiment config YAML.")
     parser.add_argument(
         "--model-kind",
         choices=["baseline", "finetuned", "custom"],

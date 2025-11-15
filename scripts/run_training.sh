@@ -2,6 +2,13 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${REPO_ROOT}/.env"
+  set +a
+fi
 SD_SCRIPTS_DIR="${REPO_ROOT}/external/sd-scripts"
 DATASET_DIR="${DATASET_DIR:-${REPO_ROOT}/dataset/knightro}"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/artifacts/finetune/knightro}"
@@ -20,12 +27,13 @@ SAVE_EVERY="${SAVE_EVERY:-200}"
 CAPTION_EXTENSION="${CAPTION_EXTENSION:-.txt}"
 NETWORK_MODULE="${NETWORK_MODULE:-networks.lora}"
 LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
+TRAIN_SCRIPT="${TRAIN_SCRIPT:-train_network.py}"
 
 cd "${SD_SCRIPTS_DIR}"
 mkdir -p "${MODELS_DIR}"
 
 if [[ "${SKIP_TRAINING:-0}" != "1" ]]; then
-  accelerate launch train_network.py \
+  accelerate launch "${TRAIN_SCRIPT}" \
     --pretrained_model_name_or_path="${BASE_MODEL}" \
     --train_data_dir="${DATASET_DIR}" \
     --resolution="${RESOLUTION}" \
@@ -54,6 +62,7 @@ MERGED_OUTPUT="${MERGED_OUTPUT:-${OUTPUT_DIR}/merged.safetensors}"
 MERGE_SOURCE="${MERGE_SOURCE:-${OUTPUT_DIR}/last.safetensors}"
 MERGE_PRECISION="${MERGE_PRECISION:-fp16}"
 MERGE_SD_MODEL_URL="${MERGE_SD_MODEL_URL:-https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.safetensors?download=true}"
+MERGE_SCRIPT="${MERGE_SCRIPT:-networks/merge_lora.py}"
 
 if [[ ! -f "${MERGE_SOURCE}" ]]; then
   echo "[!] Cannot find LoRA weights at ${MERGE_SOURCE}. Set MERGE_SOURCE to the desired file." >&2
@@ -70,7 +79,7 @@ if [[ ! -f "${MERGE_SD_MODEL}" ]]; then
   curl -L -o "${MERGE_SD_MODEL}" "${MERGE_SD_MODEL_URL}"
 fi
 
-PYTHONPATH=. python3 networks/merge_lora.py \
+PYTHONPATH=. python3 "${MERGE_SCRIPT}" \
   --sd_model "${MERGE_SD_MODEL}" \
   --save_to "${MERGED_OUTPUT}" \
   --models "${MERGE_SOURCE}" \
