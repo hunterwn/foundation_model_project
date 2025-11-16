@@ -27,3 +27,4 @@ ftfy==6.1.1
 rich==13.7.0
 omegaconf>=2.3.0
 python-dotenv>=1.0.0
+xformers==0.0.26.post1
