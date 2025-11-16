@@ -9,7 +9,14 @@ if [[ -f "${REPO_ROOT}/.env" ]]; then
   source "${REPO_ROOT}/.env"
   set +a
 fi
-SD_SCRIPTS_DIR="${REPO_ROOT}/external/sd-scripts"
+
+# Default to standard sd-scripts if not set
+SD_SCRIPTS_DIR="${SD_SCRIPTS_DIR:-external/sd-scripts}"
+
+# Convert to absolute path if it's a relative path
+if [[ "${SD_SCRIPTS_DIR}" != /* ]]; then
+  SD_SCRIPTS_DIR="${REPO_ROOT}/${SD_SCRIPTS_DIR}"
+fi
 DATASET_DIR="${DATASET_DIR:-${REPO_ROOT}/dataset/knightro}"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/artifacts/finetune/knightro}"
 LOG_DIR="${LOG_DIR:-${OUTPUT_DIR}/logs}"
@@ -29,7 +36,9 @@ SAVE_EVERY="${SAVE_EVERY:-200}"
 CAPTION_EXTENSION="${CAPTION_EXTENSION:-.txt}"
 NETWORK_MODULE="${NETWORK_MODULE:-networks.lora}"
 LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
+OPTIMIZER_ARGS="${OPTIMIZER_ARGS:-}"
 EXTRA_TRAIN_ARGS="${EXTRA_TRAIN_ARGS:-}"
+EXTRA_MERGE_ARGS="${EXTRA_MERGE_ARGS:-}"
 
 if [[ -n "${TRAIN_SCRIPT:-}" ]]; then
   echo "[!] TRAIN_SCRIPT is deprecated and ignored. Use TRAIN_ENTRYPOINT to override the trainer if needed." >&2
@@ -108,6 +117,17 @@ fi
 cd "${SD_SCRIPTS_DIR}"
 mkdir -p "${MODELS_DIR}"
 
+# Activate the virtual environment from the sd-scripts directory
+if [[ -f "${SD_SCRIPTS_DIR}/.venv/bin/activate" ]]; then
+  echo "[i] Activating virtual environment from ${SD_SCRIPTS_DIR}/.venv"
+  # shellcheck disable=SC1091
+  source "${SD_SCRIPTS_DIR}/.venv/bin/activate"
+else
+  echo "[!] ERROR: No virtual environment found at ${SD_SCRIPTS_DIR}/.venv" >&2
+  echo "[!] Run: SD_SCRIPTS_DIR=${SD_SCRIPTS_DIR} ./scripts/setup_venv.sh" >&2
+  exit 1
+fi
+
 echo "[i] Training method=${TRAIN_METHOD}, model_variant=${MODEL_VARIANT}, entrypoint=${TRAIN_SCRIPT}"
 
 TRAIN_ARGS=(
@@ -132,6 +152,12 @@ TRAIN_ARGS=(
 
 if [[ "${TRAIN_METHOD}" == "lora" ]]; then
   TRAIN_ARGS+=(--network_module="${NETWORK_MODULE}")
+fi
+
+if [[ -n "${OPTIMIZER_ARGS}" ]]; then
+  # shellcheck disable=SC2206
+  read -r -a OPT_ARGS_ARRAY <<< "${OPTIMIZER_ARGS}"
+  TRAIN_ARGS+=("${OPT_ARGS_ARRAY[@]}")
 fi
 
 if [[ -n "${EXTRA_TRAIN_ARGS}" ]]; then
@@ -181,13 +207,22 @@ if [[ "${TRAIN_METHOD}" == "lora" ]]; then
     curl -L -o "${MERGE_SD_MODEL}" "${MERGE_SD_MODEL_URL}"
   fi
 
-  PYTHONPATH=. python3 "${MERGE_SCRIPT}" \
-    --sd_model "${MERGE_SD_MODEL}" \
-    --save_to "${MERGED_OUTPUT}" \
-    --models "${MERGE_SOURCE}" \
-    --ratios 1.0 \
-    --precision "${MERGE_PRECISION}" \
+  MERGE_ARGS=(
+    --sd_model "${MERGE_SD_MODEL}"
+    --save_to "${MERGED_OUTPUT}"
+    --models "${MERGE_SOURCE}"
+    --ratios 1.0
+    --precision "${MERGE_PRECISION}"
     --save_precision "${MERGE_PRECISION}"
+  )
+
+  if [[ -n "${EXTRA_MERGE_ARGS}" ]]; then
+    # shellcheck disable=SC2206
+    read -r -a EXTRA_MERGE_ARRAY <<< "${EXTRA_MERGE_ARGS}"
+    MERGE_ARGS+=("${EXTRA_MERGE_ARRAY[@]}")
+  fi
+
+  PYTHONPATH=. python3 "${MERGE_SCRIPT}" "${MERGE_ARGS[@]}"
 
   echo "[+] Merged model written to ${MERGED_OUTPUT}"
 else

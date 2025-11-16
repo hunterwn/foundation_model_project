@@ -14,6 +14,12 @@ from diffusers import (
     UniPCMultistepScheduler,
 )
 
+try:
+    from diffusers import FluxPipeline
+    FLUX_AVAILABLE = True
+except ImportError:
+    FLUX_AVAILABLE = False
+
 from .configuration import ExperimentConfig
 from .prompts import PromptSet
 from .utils import ensure_dir, set_seed, timestamp_now
@@ -40,9 +46,11 @@ class ImageGenerator:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.pipeline = self._build_pipeline()
 
-    def _build_pipeline(self) -> StableDiffusionPipeline | StableDiffusionXLPipeline:
-        # Determine if we're using SDXL based on model path
-        is_sdxl = "xl" in self.model_path.lower()
+    def _build_pipeline(self):
+        # Determine model type based on model path
+        model_path_lower = self.model_path.lower()
+        is_flux = "flux" in model_path_lower
+        is_sdxl = "xl" in model_path_lower and not is_flux
 
         # Select appropriate dtype
         if self.config.precision == "bf16" and self.device == "cuda":
@@ -53,7 +61,14 @@ class ImageGenerator:
             torch_dtype = torch.float32
 
         # Select pipeline class
-        pipeline_cls = StableDiffusionXLPipeline if is_sdxl else StableDiffusionPipeline
+        if is_flux:
+            if not FLUX_AVAILABLE:
+                raise ImportError("FluxPipeline not available. Please upgrade diffusers.")
+            pipeline_cls = FluxPipeline
+        elif is_sdxl:
+            pipeline_cls = StableDiffusionXLPipeline
+        else:
+            pipeline_cls = StableDiffusionPipeline
 
         model_path = Path(self.model_path)
         if model_path.is_file() and model_path.suffix.lower() in {".safetensors", ".ckpt"}:
@@ -69,12 +84,19 @@ class ImageGenerator:
                 safety_checker=None,
             )
 
-        scheduler_name = (self.config.scheduler or "euler_a").lower()
-        scheduler_cls = SCHEDULERS.get(scheduler_name)
-        if scheduler_cls is not None:
-            pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
+        # Only set scheduler for non-FLUX models (FLUX uses FlowMatchEulerDiscreteScheduler by default)
+        if not is_flux:
+            scheduler_name = (self.config.scheduler or "euler_a").lower()
+            scheduler_cls = SCHEDULERS.get(scheduler_name)
+            if scheduler_cls is not None:
+                pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
+
         pipeline = pipeline.to(self.device)
-        pipeline.enable_attention_slicing()
+
+        # FLUX doesn't support attention slicing
+        if not is_flux:
+            pipeline.enable_attention_slicing()
+
         return pipeline
 
     def run(self, prompt_set: PromptSet, output_dir: Path) -> Path:
@@ -91,19 +113,34 @@ class ImageGenerator:
             "images": [],
         }
 
+        # Check if this is a FLUX pipeline
+        is_flux = FLUX_AVAILABLE and isinstance(self.pipeline, FluxPipeline)
+
         for prompt_entry in prompt_set.prompts:
             for image_idx in range(self.config.num_images_per_prompt):
                 seed = self.config.seed + prompt_entry.index * 1000 + image_idx
                 generator = torch.Generator(device=self.device).manual_seed(seed)
-                result = self.pipeline(
-                    prompt=prompt_entry.formatted,
-                    negative_prompt=self.config.negative_prompt,
-                    num_inference_steps=self.config.num_inference_steps,
-                    guidance_scale=self.config.guidance_scale,
-                    height=self.config.height,
-                    width=self.config.width,
-                    generator=generator,
-                )
+
+                # FLUX doesn't support negative_prompt parameter
+                if is_flux:
+                    result = self.pipeline(
+                        prompt=prompt_entry.formatted,
+                        num_inference_steps=self.config.num_inference_steps,
+                        guidance_scale=self.config.guidance_scale,
+                        height=self.config.height,
+                        width=self.config.width,
+                        generator=generator,
+                    )
+                else:
+                    result = self.pipeline(
+                        prompt=prompt_entry.formatted,
+                        negative_prompt=self.config.negative_prompt,
+                        num_inference_steps=self.config.num_inference_steps,
+                        guidance_scale=self.config.guidance_scale,
+                        height=self.config.height,
+                        width=self.config.width,
+                        generator=generator,
+                    )
                 image = result.images[0]
                 file_name = f"{prompt_entry.index:02d}-{prompt_entry.slug}-i{image_idx:02d}.png"
                 relative_path = Path("images") / file_name

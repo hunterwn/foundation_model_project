@@ -8,33 +8,88 @@ This repository contains the scaffolding for comparing a pre-trained Stable Diff
 .
 ├── configs/                # YAML configs for experiments
 ├── prompts/                # Prompt templates with your subject token
-├── scripts/                # Helper shell scripts (env setup, etc.)
-├── src/                    # Original Python modules for this project
-├── external/               # Place third-party repos here (e.g., kohya-ss/sd-scripts)
+├── scripts/                # Helper shell scripts (env setup, training wrapper)
+├── src/                    # Original Python modules for this project (generation, comparison)
+├── external/               # Third-party repos (e.g., kohya-ss/sd-scripts with their own .venv)
 ├── artifacts/              # Auto-created outputs (datasets, generations, comparisons)
 ├── models/                 # Downloaded base checkpoints (sd-v1-5-pruned, etc.)
-├── requirements.txt
+├── .venv/                  # Project-level virtual environment (for src/ scripts)
+├── requirements.txt        # Dependencies for project venv (SD 1.5, SDXL, FLUX)
 └── README.md
 ```
 
 ## 1. Environment Setup
 
+This project uses **two separate virtual environments**:
+
+1. **Project-level venv** (`.venv` at repo root): For running Python scripts from `src/` (image generation, comparison, etc.). Uses `requirements.txt`.
+2. **sd-scripts venv** (in `external/*/sd-scripts/.venv`): For training with kohya-ss/sd-scripts. Uses sd-scripts' own `requirements.txt`.
+
+This separation ensures that training dependencies (which may be older) don't conflict with generation dependencies (which need newer versions for FLUX support).
+
+### Python Version
+
+Set the Python version in `.python-version` at the repository root. The project venv will use this version:
+
 ```bash
+# Most use cases (supports newer dependencies)
+echo "3.11.11" > .python-version
+
+# If you need to match a specific sd-scripts requirement
+echo "3.10.9" > .python-version
+```
+
+If using pyenv, install the required version first:
+
+```bash
+pyenv install 3.11.11  # or whatever version you need
+```
+
+### Virtual Environment Setup
+
+```bash
+# Creates both .venv (project) and sd-scripts/.venv (training)
 ./scripts/setup_venv.sh
-source .venv/bin/activate
 ```
 
-The helper script creates `.venv`, installs the packages from `requirements.txt`, and upgrades `pip`. If you prefer to manage environments manually, run:
+The helper script:
+1. **Project venv**: Reads Python version from `.python-version` (uses pyenv if available), creates `.venv` at repo root, and installs `requirements.txt`
+2. **sd-scripts venv**: Creates venv at `${SD_SCRIPTS_DIR}/.venv` using:
+   - Python 3.10.9 if "flux" is detected in the path (for kohya_flux)
+   - Python version from `.python-version` otherwise (for standard sd-scripts)
+   - Installs packages from the sd-scripts' own `requirements.txt`
+
+To set up multiple sd-scripts installations, run the script with different `SD_SCRIPTS_DIR` values:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Set up standard sd-scripts
+SD_SCRIPTS_DIR=external/sd-scripts ./scripts/setup_venv.sh
+
+# Set up kohya_flux (automatically uses Python 3.10.9)
+SD_SCRIPTS_DIR=external/kohya_flux/sd-scripts ./scripts/setup_venv.sh
 ```
 
-Install the correct CUDA-enabled build of `torch` for your GPU before running inference or kohya-ss training.
+### Activating the Project Virtual Environment
 
-All shell and Python scripts automatically load environment variables from `.env` at the repository root (using `python-dotenv`). Add entries like `WANDB_API_KEY=...` there instead of exporting manually. Copy `example.env` or `example.xl.env` to `.env` depending on whether you want the SD 1.5 defaults or the SDXL defaults, then tweak values from there.
+Before running Python scripts from `src/`, activate the project virtual environment:
+
+```bash
+source scripts/activate_venv.sh
+```
+
+If you prefer manual activation:
+
+```bash
+source .venv/bin/activate
+```
+
+### Training Environment
+
+The training scripts (`scripts/run_training.sh`) automatically activate the venv from the sd-scripts directory specified by `SD_SCRIPTS_DIR`. This venv is created automatically by `setup_venv.sh` as described above.
+
+### Environment Variables
+
+All shell and Python scripts automatically load environment variables from `.env` at the repository root (using `python-dotenv`). Add entries like `WANDB_API_KEY=...` and `SD_SCRIPTS_DIR=...` there instead of exporting manually. Copy one of the templates (`example.env` for SD 1.5, `example.xl.env` for SDXL, `example.flux.env` for Flux/SD3) to `.env` and adjust paths or hyperparameters as needed.
 
 ## 2. Configure Experiments & Prompts
 
@@ -132,6 +187,14 @@ Tweak `--subject-token` and `--caption-template` to fit your subject. Use the re
    ```
    Adjust parameters (VRAM, steps, LoRA vs. full fine-tune) to suit your hardware.
 4. When training completes, set `fine_tuned_model` in `configs/experiment.yaml` to the folder containing the checkpoint you want to evaluate (e.g., `artifacts/finetune/my_subject/last`).
+
+Flux / SD3 note: bash-j’s fork of `kohya_ss` contains the Flux patches referenced in the Reddit guide. Clone it with submodules and point `SD_SCRIPTS_DIR` to the forked `sd-scripts` folder:
+
+```bash
+git clone --recurse-submodules https://github.com/bash-j/kohya_ss.git external/kohya_flux
+```
+
+Then copy `example.flux.env` to `.env` to get the recommended Flux defaults (Flux base model ID, Adafactor optimizer args, Flux-specific `EXTRA_TRAIN_ARGS`, etc.). The helper script uses those env vars to target the correct training/merging entrypoints.
 
 The helper script `./scripts/run_training.sh` wraps these steps. It creates `models/` if needed, downloads `sd-v1-5-pruned.safetensors` into that folder when the file is missing, launches training (unless `SKIP_TRAINING=1`), and then merges the resulting LoRA into `artifacts/finetune/<subject>/merged.safetensors`. Override paths via env vars such as `DATASET_DIR`, `OUTPUT_DIR`, or `MERGE_SD_MODEL`. The script auto-detects whether you're targeting SD 1.5 or SDXL and chooses the correct kohya entrypoint (`train_network.py`, `sdxl_train_network.py`, `train_db.py`, or `sdxl_train.py`) plus the right merge script/base checkpoint; set `MODEL_VARIANT=sd15|sdxl` or `TRAIN_ENTRYPOINT=/path/to/custom.py` only if you need to override the detection. Need to pass extra kohya flags (e.g., `--gradient_checkpointing`, `--cache_latents`, `--xformers`)? Set `EXTRA_TRAIN_ARGS="--flag-a --flag-b"` in `.env` and they will be appended to the Accelerate command. Set `TRAIN_METHOD=full` when you want to run kohya-ss' `train_db.py`/`sdxl_train.py` for a full DreamBooth-style fine-tune—the wrapper will automatically skip the LoRA merge step because the checkpoint saved to `OUTPUT_DIR` already includes the base weights.
 
