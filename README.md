@@ -198,6 +198,36 @@ git clone --recurse-submodules https://github.com/bash-j/kohya_ss.git external/k
 
 Then copy `example.flux.env` to `.env` to get the recommended Flux defaults (Flux base model ID, Adafactor optimizer args, Flux-specific `EXTRA_TRAIN_ARGS`, etc.). The helper script uses those env vars to target the correct training/merging entrypoints.
 
+For Flux inference outside diffusers (e.g., `flux_minimal_inference.py`), you need the BFL-format auxiliary weights alongside your merged checkpoint. Download them once and keep them under `models/black-forest-labs_FLUX.1-dev/`:
+
+- `clip_l.safetensors` and `t5xxl_fp16.safetensors` from the community mirror `comfyanonymous/flux_text_encoders`
+- `ae.safetensors` (and the base `flux1-dev.safetensors`) from the official `black-forest-labs/FLUX.1-dev` repo
+
+Example commands (requires `huggingface-cli login`):
+
+```bash
+huggingface-cli download comfyanonymous/flux_text_encoders clip_l.safetensors \
+  --local-dir models/black-forest-labs_FLUX.1-dev --local-dir-use-symlinks False
+
+huggingface-cli download comfyanonymous/flux_text_encoders t5xxl_fp16.safetensors \
+  --local-dir models/black-forest-labs_FLUX.1-dev --local-dir-use-symlinks False
+
+huggingface-cli download black-forest-labs/FLUX.1-dev ae.safetensors \
+  --local-dir models/black-forest-labs_FLUX.1-dev --local-dir-use-symlinks False
+```
+
+With those files in place you can run, for example:
+
+```bash
+python external/kohya_flux/sd-scripts/flux_minimal_inference.py \
+  --ckpt artifacts/finetune/knightro_flux/merged.safetensors \
+  --clip_l models/black-forest-labs_FLUX.1-dev/clip_l.safetensors \
+  --t5xxl models/black-forest-labs_FLUX.1-dev/t5xxl_fp16.safetensors \
+  --ae models/black-forest-labs_FLUX.1-dev/ae.safetensors \
+  --prompt "RAW photo of <knightro> on the field" \
+  --out artifacts/outputs/flux-merged
+```
+
 The helper script `./scripts/run_training.sh` wraps these steps. It creates `models/` if needed, downloads `sd-v1-5-pruned.safetensors` into that folder when the file is missing, launches training (unless `SKIP_TRAINING=1`), and then merges the resulting LoRA into `artifacts/finetune/<subject>/merged.safetensors`. Override paths via env vars such as `DATASET_DIR`, `OUTPUT_DIR`, or `MERGE_SD_MODEL`. The script auto-detects whether you're targeting SD 1.5 or SDXL and chooses the correct kohya entrypoint (`train_network.py`, `sdxl_train_network.py`, `train_db.py`, or `sdxl_train.py`) plus the right merge script/base checkpoint; set `MODEL_VARIANT=sd15|sdxl` or `TRAIN_ENTRYPOINT=/path/to/custom.py` only if you need to override the detection. Need to pass extra kohya flags (e.g., `--gradient_checkpointing`, `--cache_latents`, `--xformers`)? Set `EXTRA_TRAIN_ARGS="--flag-a --flag-b"` in `.env` and they will be appended to the Accelerate command. Set `TRAIN_METHOD=full` when you want to run kohya-ss' `train_db.py`/`sdxl_train.py` for a full DreamBooth-style fine-tune—the wrapper will automatically skip the LoRA merge step because the checkpoint saved to `OUTPUT_DIR` already includes the base weights.
 
 ## 6. Post Fine-Tune Generation
