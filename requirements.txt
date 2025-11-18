@@ -17,3 +17,6 @@ accelerate>=0.20.0
 
 # Newer diffusers needs newer huggingface-hub
 huggingface-hub>=0.23.2
+
+protobuf
+sentencepiece

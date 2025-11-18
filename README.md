@@ -188,7 +188,9 @@ Tweak `--subject-token` and `--caption-template` to fit your subject. Use the re
    Adjust parameters (VRAM, steps, LoRA vs. full fine-tune) to suit your hardware.
 4. When training completes, set `fine_tuned_model` in `configs/experiment.yaml` to the folder containing the checkpoint you want to evaluate (e.g., `artifacts/finetune/my_subject/last`).
 
-Flux / SD3 note: bash-j’s fork of `kohya_ss` contains the Flux patches referenced in the Reddit guide. Clone it with submodules and point `SD_SCRIPTS_DIR` to the forked `sd-scripts` folder:
+Flux / SD3 note: bash-j's fork of `kohya_ss` contains the Flux patches required for Flux training. The Flux training instructions are based on the [PixelWave model guide on Civitai](https://civitai.com/models/141592/pixelwave).
+
+Clone the repository with submodules into `external/kohya_flux` and point `SD_SCRIPTS_DIR` to the forked `sd-scripts` folder:
 
 ```bash
 git clone --recurse-submodules https://github.com/bash-j/kohya_ss.git external/kohya_flux

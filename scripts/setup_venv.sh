@@ -110,13 +110,26 @@ if [[ -d "${SD_SCRIPTS_DIR}" ]]; then
   pip install --upgrade pip
 
   # Install sd-scripts requirements (cd to the directory first for relative paths)
-  if [[ -f "${SD_SCRIPTS_DIR}/requirements.txt" ]]; then
-    echo "[+] Installing sd-scripts requirements from ${SD_SCRIPTS_DIR}/requirements.txt"
-    cd "${SD_SCRIPTS_DIR}"
-    pip install -r requirements.txt
+  SD_REQUIREMENTS_FILE="${SD_SCRIPTS_DIR}/requirements.txt"
+  SD_REQUIREMENTS_DIR="${SD_SCRIPTS_DIR}"
+
+  # The kohya FLUX fork keeps its canonical requirements one level up
+  if [[ "${IS_FLUX}" == true ]]; then
+    FLUX_ROOT_DIR="$(dirname "${SD_SCRIPTS_DIR}")"
+    if [[ -f "${FLUX_ROOT_DIR}/requirements.txt" ]]; then
+      SD_REQUIREMENTS_FILE="${FLUX_ROOT_DIR}/requirements.txt"
+      SD_REQUIREMENTS_DIR="${FLUX_ROOT_DIR}"
+      echo "[i] Detected kohya FLUX fork, installing requirements from ${SD_REQUIREMENTS_FILE}"
+    fi
+  fi
+
+  if [[ -f "${SD_REQUIREMENTS_FILE}" ]]; then
+    echo "[+] Installing sd-scripts requirements from ${SD_REQUIREMENTS_FILE}"
+    cd "${SD_REQUIREMENTS_DIR}"
+    pip install -r "$(basename "${SD_REQUIREMENTS_FILE}")"
     cd "${REPO_ROOT}"
   else
-    echo "[!] WARNING: No requirements.txt found in ${SD_SCRIPTS_DIR}" >&2
+    echo "[!] WARNING: No requirements.txt found for sd-scripts at ${SD_REQUIREMENTS_FILE}" >&2
   fi
 
   deactivate

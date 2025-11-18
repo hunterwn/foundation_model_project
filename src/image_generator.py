@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -52,6 +53,9 @@ class ImageGenerator:
         is_flux = "flux" in model_path_lower
         is_sdxl = "xl" in model_path_lower and not is_flux
 
+        # Check environment variables for memory optimization settings early
+        enable_cpu_offload = os.getenv("ENABLE_MODEL_CPU_OFFLOAD", "false").lower() == "true"
+
         # Select appropriate dtype
         if self.config.precision == "bf16" and self.device == "cuda":
             torch_dtype = torch.bfloat16
@@ -91,10 +95,29 @@ class ImageGenerator:
             if scheduler_cls is not None:
                 pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
-        pipeline = pipeline.to(self.device)
+        # Enable memory optimizations based on model type and environment variables
+        if is_flux:
+            # Retrieve environment variables for VAE optimizations
+            enable_vae_tiling = os.getenv("ENABLE_VAE_TILING", "false").lower() == "true"
+            enable_vae_slicing = os.getenv("ENABLE_VAE_SLICING", "false").lower() == "true"
 
-        # FLUX doesn't support attention slicing
-        if not is_flux:
+            if enable_cpu_offload:
+                # Enable sequential CPU offloading for FLUX models
+                # This moves model components to GPU one at a time during inference
+                pipeline.enable_sequential_cpu_offload()
+            else:
+                pipeline = pipeline.to(self.device)
+
+            if enable_vae_tiling:
+                # Enable VAE tiling to process images in tiles (reduces VRAM usage)
+                pipeline.vae.enable_tiling()
+
+            if enable_vae_slicing:
+                # Enable VAE slicing for even lower memory usage
+                pipeline.vae.enable_slicing()
+        else:
+            pipeline = pipeline.to(self.device)
+            # Non-FLUX models support attention slicing
             pipeline.enable_attention_slicing()
 
         return pipeline
