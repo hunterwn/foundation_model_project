@@ -39,9 +39,11 @@ class ImageGenerator:
         model_path: str,
         config: ExperimentConfig,
         model_kind: str,
+        lora_path: str | None = None,
         device: str | None = None,
     ) -> None:
         self.model_path = model_path
+        self.lora_path = lora_path
         self.config = config
         self.model_kind = model_kind
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,6 +97,22 @@ class ImageGenerator:
             if scheduler_cls is not None:
                 pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
+        # Load LoRA weights if provided
+        if self.lora_path:
+            lora_path = Path(self.lora_path)
+            if not lora_path.exists():
+                raise FileNotFoundError(f"LoRA weights not found at {lora_path}")
+            pipeline.load_lora_weights(str(lora_path))
+            lora_scale = float(os.getenv("LORA_SCALE", "1.0"))
+            if hasattr(pipeline, "fuse_lora"):
+                pipeline.fuse_lora(lora_scale=lora_scale)
+            elif hasattr(pipeline, "set_adapters"):
+                pipeline.set_adapters(["default"], weights=[lora_scale])
+            else:
+                # Fall back to scaling via internal attribute if available
+                if hasattr(pipeline, "lora_scale"):
+                    pipeline.lora_scale = lora_scale
+
         # Enable memory optimizations based on model type and environment variables
         if is_flux:
             # Retrieve environment variables for VAE optimizations
@@ -129,6 +147,7 @@ class ImageGenerator:
         metadata = {
             "experiment_name": self.config.experiment_name,
             "model_path": self.model_path,
+            "lora_path": self.lora_path,
             "model_kind": self.model_kind,
             "generated_at": timestamp_now(),
             "config": self.config.to_dict(),
